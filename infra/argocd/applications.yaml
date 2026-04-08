@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/yuankraj/ai-task-infra.git'
-    targetRevision: main
+    targetRevision: master
     path: k8s/overlays/dev
   destination:
     server: 'https://kubernetes.default.svc'
@@ -31,8 +31,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/your-org/ai-task-infra.git'
-    targetRevision: main
+    repoURL: 'https://github.com/yuankraj/ai-task-infra.git'
+    targetRevision: master
     path: k8s/overlays/prod
   destination:
     server: 'https://kubernetes.default.svc'
