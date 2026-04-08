@@ -28,7 +28,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: worker
-          image: placeholder/atp-worker:latest
+          image: yuankraj/atp-worker:39f1171
           imagePullPolicy: Always
           resources:
             requests:

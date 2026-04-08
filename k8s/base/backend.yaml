@@ -28,7 +28,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: backend
-          image: placeholder/atp-backend:latest
+          image: yuankraj/atp-backend:39f1171
           imagePullPolicy: Always
           ports:
             - containerPort: 5000

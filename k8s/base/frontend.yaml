@@ -27,7 +27,7 @@ spec:
         fsGroup: 1001
       containers:
         - name: frontend
-          image: placeholder/atp-frontend:latest
+          image: yuankraj/atp-frontend:39f1171
           imagePullPolicy: Always
           ports:
             - containerPort: 80
