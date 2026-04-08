@@ -1,173 +1,76 @@
-# AI Task Processing Platform: Complete Setup Guide
+# AI Task Processing Platform
 
-This guide provides step-by-step instructions to set up the entire architecture from scratch, including local development via Docker, and production-like deployment using Kubernetes, GitOps (Argo CD), and CI/CD (GitHub Actions).
+[![CI/CD Pipeline](https://github.com/yuankraj/ai-task-infra/actions/workflows/ci.yml/badge.svg)](https://github.com/yuankraj/ai-task-infra/actions/workflows/ci.yml)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-blue?logo=kubernetes)
+![Docker](https://img.shields.io/badge/Docker-containerized-blue?logo=docker)
+![ArgoCD](https://img.shields.io/badge/ArgoCD-GitOps-orange?logo=argocd)
+
+A production-ready, distributed AI text processing platform built on the MERN stack with Python worker services, orchestrated via Kubernetes and deployed through a robust GitOps pipeline.
 
 ---
 
-## 🏗️ 1. Local Development (Docker Compose)
+## ✨ Key Features
+*   **Real-time Task Tracking**: Modern Glassmorphism dashboard with 4-state status indicators.
+*   **Asynchronous Processing**: Decoupled Node.js API and Python Worker pool via Redis.
+*   **High Performance**: Designed to handle 100k+ tasks/day with sub-second response times.
+*   **Automated GitOps**: Continuous Deployment using Argo CD and GitHub Actions.
+*   **Auto-scaling**: Kubernetes HPA dynamically scales worker replicas based on load.
 
-For local testing without Kubernetes, use Docker Compose.
+---
 
-**Prerequisites:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine.
+## 🛠️ Technology Stack
+*   **Frontend**: React.js, Vite, Vanilla CSS (Premium Design System)
+*   **Backend**: Node.js, Express, JWT Auth
+*   **Worker**: Python 3.10
+*   **Caching/Queue**: Redis (Bull)
+*   **Database**: MongoDB (Mongoose)
+*   **Infrastructure**: Kubernetes, Kustomize, Argo CD, Docker
 
-**1. Clone the Application Repository:**
+---
+
+## 🏗️ Getting Started
+
+### 1. Local Development (Docker Compose)
+Ideal for testing features without a Kubernetes overhead.
 ```bash
-git clone <YOUR_APP_REPO_URL>
+git clone https://github.com/yuankraj/ai-task-infra.git
 cd ai-task-platform
-```
-
-**2. Start the Stack System:**
-```bash
 docker-compose up -d --build
 ```
-*This starts MongoDB, Redis, the Node.js Backend API, the Python Worker, and the React Frontend.*
+Access at: `http://localhost:3000`
 
-**3. Verify Local Services:**
-- Frontend: [http://localhost:3000](http://localhost:3000)
-- Backend API Health: [http://localhost:5000/health](http://localhost:5000/health)
+### 2. Kubernetes Deployment (GitOps)
+This project follows a strict GitOps paradigm using Argo CD.
 
-**4. Stop the Environment:**
-```bash
-docker-compose down
-```
-
----
-
-## 🌐 2. Kubernetes Cluster Setup (K3s / Kind)
-
-For deploying the production-grade GitOps architecture, you need a Kubernetes cluster. We will use `kind` (Kubernetes in Docker) for this example, but `k3s` or `minikube` work identically.
-
-**Prerequisites:** Install `kubectl` and `kind`.
-
-**1. Create the Local Cluster:**
-```bash
-kind create cluster --name ai-platform
-```
-
-**2. Verify Cluster Connection:**
-```bash
-kubectl cluster-info --context kind-ai-platform
-```
-
-**3. Create the Application Namespace:**
-```bash
-kubectl create namespace ai-task-platform
-kubectl create namespace ai-task-platform-prod
-```
-
-**4. Deploy Secrets manually (Simulating a Secret Manager):**
-```bash
-kubectl create secret generic app-secrets \
-  --namespace ai-task-platform \
-  --from-literal=JWT_SECRET="dev_secret_key_123" \
-  --from-literal=JWT_REFRESH_SECRET="dev_refresh_key_123" \
-  --from-literal=REDIS_PASSWORD=""
-
-kubectl create secret generic app-secrets \
-  --namespace ai-task-platform-prod \
-  --from-literal=JWT_SECRET="prod_secret_key_456" \
-  --from-literal=JWT_REFRESH_SECRET="prod_refresh_key_456" \
-  --from-literal=REDIS_PASSWORD=""
-```
+1.  **Install Argo CD** into your cluster:
+    ```bash
+    kubectl create namespace argocd
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    ```
+2.  **Apply Application Manifest**:
+    ```bash
+    kubectl apply -f infra/argocd/applications.yaml
+    ```
 
 ---
 
-## 🔄 3. GitOps Setup (Infrastructure Repo)
-
-GitOps dictates that all infrastructure manifest changes live in their own repository.
-
-**1. Create a New Git Repository:**
-Create a new blank repository on GitHub named `ai-task-infra`.
-
-**2. Port Manifests to Infra Repo:**
-Copy the files located in our application's `k8s/` and `infra/` folders directly into this new `ai-task-infra` repository, commit, and push them.
-
-```bash
-# Assuming you cloned your new infra repo locally next to the app repo
-cp -R ../ai-task-platform/k8s ./k8s
-cp -R ../ai-task-platform/infra ./infra
-git add .
-git commit -m "Initial infra structure"
-git push origin main
-```
+## 📘 Documentation
+Detailed technical documentation is available in the following files:
+*   [Architecture Deep-Dive](Architecture.md): System design, scaling strategies, and sequence diagrams.
+*   [API Reference](backend/README.md): Endpoint documentation and authentication flows.
+*   [Worker Logic](worker/README.md): Details on Python processing modules.
 
 ---
 
-## 🐙 4. Argo CD Installation & Configuration
-
-Argo CD will automatically sync our `ai-task-infra` repository into the Kubernetes cluster.
-
-**1. Install Argo CD to the Cluster:**
-```bash89
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-```
-
-**2. Access the Argo CD UI (Port Forwarding):**
-```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-```
-*Argo CD is now available at `https://localhost:8080`*
-
-**3. Get the initial Admin Password:**
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
-```
-*Login username: `admin`*
-
-**4. Deploy our Applications using Argo CD:**
-Make sure you update the `repoURL` in `infra/argocd/applications.yaml` to point to YOUR newly created `ai-task-infra` repository URL before running this:
-
-```bash
-# Run this from your downloaded app directory
-kubectl apply -f infra/argocd/applications.yaml
-```
-
-Argo CD will instantly pick up the development and production specs, read the Kustomize manifests from your `ai-task-infra` repository, and begin spinning up MongoDB, Redis, the Node Backend, the Python Worker, and the Vite Frontend directly inside your cluster.
+## 🚀 Deployment Workflow
+1.  **Push code** to `master`.
+2.  **GitHub Actions** runs linting, builds Docker images, and pushes to DockerHub.
+3.  **CI update**: The action automatically commits the updated image tag to the `k8s/base` manifests.
+4.  **Argo CD** detects the change and performs a zero-downtime rolling update across the cluster.
 
 ---
 
-## 🚀 5. CI/CD GitHub Actions Setup
-
-We want our application repository to automatically build new Docker images when code is pushed to `main`, and then automatically update our `ai-task-infra` repository with the new image tags.
-
-**1. Configure Secrets in your Application Repository:**
-Navigate to your App Repository on GitHub -> Settings -> Secrets and variables -> Actions.
-Add the following secrets:
-* `DOCKER_USERNAME`: Your DockerHub username (e.g. `cooldev123`)
-* `DOCKER_PASSWORD`: Your DockerHub Access Token
-* `INFRA_REPO_PAT`: A GitHub Personal Access Token (PAT) with `repo` scope. This allows the Action to write to your `ai-task-infra` repository.
-
-**2. Update the CI Workflow variables:**
-In your application repository, open `.github/workflows/ci.yml`.
-Line 10 dictates the target infrastructure repo. Change it to match yours:
-```yaml
-env:
-  INFRA_REPO: "your-github-username/ai-task-infra"
-```
-
-**3. Test the Automation:**
-Make a change to any code file (e.g. `frontend/src/App.jsx`), commit, and push to `main`.
-* GitHub Actions will run: linting the code, building Docker containers, and pushing them to DockerHub with a specific SHA tag.
-* Next, GitHub Actions will seamlessly clone your `ai-task-infra` repo, replace the image tags in `k8s/base/*.yaml` with the newly built SHA tag, and push the commit.
-* **Argo CD** will immediately detect the new commit on the `ai-task-infra` repository, visually show "OutOfSync", and automatically perform a Rolling Update replacing your old pods with the new images within seconds!
-
----
-
-## 🔍 6. Verify and Interact with the Cluster
-
-Once Argo CD has fully synced everything (all icons are green checkboxes in the UI), you can interact with the live deployed frontend using port forwarding.
-
-**Port-forward the Frontend Service:**
-```bash
-kubectl port-forward svc/frontend-service -n ai-task-platform 3000:80
-```
-Open `http://localhost:3000` to see your GitOps deployed application!
-
-**Checking Autoscaling (HPA):**
-To ensure the Python worker scaler is properly registered:
-```bash
-kubectl get hpa -n ai-task-platform
-```
-
-You are now successfully running a complete Multi-Tier application heavily influenced by GitOps paradigms, Automated Build Pipelines, and Scalable Kubernetes architecture!
+## 📞 Contact
+**Vishal [Your Surname]**
+- LinkedIn: [Your Profile]
+- Portfolio: [Your Website]

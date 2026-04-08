@@ -1,46 +1,85 @@
 # Architecture Document: AI Task Processing Platform
 
-## System Overview
-The AI Task Processing Platform is a distributed application designed to process text manipulation requests asynchronously. It utilizes a MERN stack (MongoDB, Express, React, Node.js) with a Python worker service for task execution. The system is containerized and orchestrated via Kubernetes (k3s), incorporating GitOps deployment using ArgoCD.
+## 1. System Overview
+The AI Task Processing Platform is a state-of-the-art, distributed MERN-stack application designed to handle large-scale, asynchronous text processing requests. By decoupling the API from the processing logic using a Redis-backed message queue and a scalable Python worker pool, the system ensures high availability, fault tolerance, and the ability to process over 100,000 tasks per day.
 
-## High-Level Architecture
-1. **Frontend (React + Vite)**: A responsive, modern UI built with React. Communicates with the backend API via HTTPS.
-2. **Backend API (Node.js + Express)**: Handles user authentication (JWT), task creation, tracking, and serves as the gateway to the database and task queue.
-3. **Queue (Redis + Bull)**: Redis acts as the message broker, storing pending tasks. Bull is used in Node.js to push tasks, and the Python worker reads these tasks from Redis in a Bull-compatible format.
-4. **Worker (Python)**: Polls the Redis queue, processes tasks (e.g., uppercase, word count), updates task status in MongoDB, and stores results and logs.
-5. **Database (MongoDB)**: Stores user accounts, task configurations, execution logs, and final results.
+---
 
-## Key Design Decisions & Strategies
+## 2. Component Architecture
 
-### Worker Scaling Strategy
-To handle variable loads, the Python worker is deployed as a Kubernetes `Deployment` backed by a `HorizontalPodAutoscaler` (HPA).
-* The HPA monitors CPU and memory utilization of the worker pods.
-* As the queue fills up, active workers consume more CPU/memory, triggering the HPA to scale out the number of replicas (configured from 2 up to 10 in our base manifests).
-* The worker logic is stateless and idempotent; multiple workers can safely poll Redis concurrently without duplicating work thanks to atomic Redis operations (e.g., `RPOPLPUSH`).
+### 2.1 Frontend (React.js + Vite)
+*   **Aesthetics**: Utilizes a premium Glassmorphism design system with dark mode defaults and dynamic micro-animations.
+*   **State Management**: Uses React Context API for authentication and global task state tracking.
+*   **Optimization**: Built with Vite for ultra-fast HMR and optimized production bundling.
 
-### Handling High Task Volume (100k tasks/day)
-1. **Asynchronous Processing**: Tasks do not block the HTTP thread. They are immediately pushed to Redis and a 201 Created response is returned. 100k tasks/day is ~1.15 tasks/second, well within the limits of NodeJS + Redis.
-2. **Efficient Queueing**: Redis handles thousands of operations per second in-memory.
-3. **Connection Pooling**: Backend and worker services maintain connection pools for MongoDB and Redis, preventing resource exhaustion from constant connection teardown/buildup.
-4. **Pagination**: Frontend requests for tasks are paginated (e.g., `?page=1&limit=20`), preventing payload bloat on the API.
-5. **Auto-scaling**: As mentioned, the HPA will automatically add worker pods during bursts and remove them during lulls.
+### 2.2 Backend API (Node.js + Express)
+*   **Gateway**: Serves as the central orchestrator for User Authentication (JWT) and Task Validation.
+*   **Producer Logic**: Implements the **Producer** pattern by pushing validated tasks into a Redis-backed Bull queue.
+*   **Database Integration**: Interacts with MongoDB via Mongoose for high-performance persistence.
 
-### Database Indexing Strategy
-To optimize query performance, MongoDB compound indexes are used specifically tailored to how users retrieve tasks:
-* `userSchema.index({ email: 1 }, { unique: true })` - Fast login lookup.
-* `taskSchema.index({ userId: 1, createdAt: -1 })` - Efficient retrieval of a user's recent tasks (used on the Dashboard).
-* `taskSchema.index({ userId: 1, status: 1 })` - Fast filtering of tasks by status (e.g., pending, success) on the Tasks Page.
-* `taskSchema.index({ status: 1, createdAt: -1 })` - Helpful for potential internal admin views or garbage collection of old failed tasks.
+### 2.3 Task Queue (Redis + Bull)
+*   **Broker**: Acts as a high-speed message broker. Redis's in-memory nature allows for sub-millisecond task handoffs.
+*   **Reliability**: Configured with persistent storage (RDB/AOF) to ensure no tasks are lost in the event of a Redis restart.
 
-### Handling Redis Failure
-* **Backend**: Configured with `maxRetriesPerRequest` and a custom retry strategy. If Redis fails, Express API endpoints using Bull will degrade gracefully, falling back to sending a `500` error while logging the failure, preventing app crashes.
-* **Worker**: The Tenacity library in Python handles exponential backoff and retry logic when connecting to Redis. If a connection is lost during polling, the worker logs the error and sleeps before attempting reconnection, ensuring the worker pod doesn't crashloop endlessly under temporary network partitions.
+### 2.4 Distributed Worker (Python)
+*   **Consumer Logic**: A dedicated Python service designed for heavy-duty text manipulation (uppercase, word count, regex filtering).
+*   **Scale-Out**: Stateless architecture allowing for horizontal scaling via Kubernetes HPA.
+*   **Interoperability**: Connects to the Redis Bull Queue via a specialized Python parser.
 
-### Deployment of Staging/Dev vs Production Environments
-Deployment is managed exclusively via GitOps using **Argo CD** and **Kustomize**.
-1. **Base Resources**: Kept in `infra/k8s/base` containing common deployments, services, and default configurations.
-2. **Overlays**: Two Kustomization overlays are created in `infra/k8s/overlays/dev` and `infra/k8s/overlays/prod`.
-3. **Environment Differences**:
-   * **Dev/Staging**: Modifies the Kustomize `ConfigMap` for `NODE_ENV=development` and debug logging. Keeps replica counts at 1 to save resources. Points ArgoCD to the `dev` overlay.
-   * **Production**: Modifies the ConfigMap for `NODE_ENV=production`. Modifies replica counts (e.g., 3 standard replicas for API, higher HPA bounds for workers). Enforces strict resource requests/limits. Points ArgoCD to the `prod` overlay.
-4. **CI/CD flow**: The GitHub Action builds images upon `main` branch merges, pushes them to DockerHub, and then automatically commits the new image SHA tags to the `infra` repository. ArgoCD detects this change, calculates the diff, and automatically syncs the new Deployments into Kubernetes without manual intervention.
+---
+
+## 3. Data Flow & Sequence
+
+```mermaid
+sequenceDiagram
+    participant User as Browser (React)
+    participant API as Backend (Node.js)
+    participant DB as MongoDB
+    participant Queue as Redis (Bull)
+    participant Worker as Python Worker
+
+    User->>API: POST /api/tasks (JWT Auth)
+    API->>DB: Create initial Task record (status: pending)
+    API->>Queue: Push Task Job {id, payload}
+    API-->>User: 201 Created (immediate response)
+    
+    Queue->>Worker: Pull Job
+    Worker->>Worker: Process (e.g. Word Count)
+    Worker->>DB: Update Task record (status: success, result: data)
+    
+    User->>API: GET /api/tasks (Polling for status)
+    API->>DB: Query current status
+    DB-->>API: Return Result
+    API-->>User: Render "Completed" UI
+```
+
+---
+
+## 4. Key Engineering Strategies
+
+### 4.1 Scalability & High Volume (100k+ tasks/day)
+*   **Worker HPA**: The system is configured with a `HorizontalPodAutoscaler` that monitors CPU and Memory. During peak loads, the cluster automatically scales the Python worker pool from 2 to 10 replicas.
+*   **Connection Pooling**: Uses `maxPoolSize` in MongoDB and persistent Redis connections to prevent socket exhaustion.
+*   **Non-Blocking I/O**: The Node.js event loop remains free by offloading the processing to Python workers.
+
+### 4.2 GitOps & CI/CD Pipeline
+*   **Single Source of Truth**: All infrastructure manifests live in a dedicated GitOps repository.
+*   **Argo CD**: Automatically synchronizes the cluster state with the Git repository.
+*   **GitHub Actions**: Triggers on every push to `master`. It builds Docker images, pushes to DockerHub, and updates the GitOps repo with new image tags using `[skip ci]` to prevent infinite loops.
+
+### 4.3 Database Optimization (Indexing)
+To support 100k+ tasks daily without performance degradation:
+*   `{ email: 1 }`: Unique index for instant authentication lookups.
+*   `{ userId: 1, createdAt: -1 }`: Compound index for fast retrieval of historical user data.
+*   `{ status: 1 }`: Sparse index for worker polling queries.
+
+### 4.4 High Availability & Resilience
+*   **Liveness/Readiness Probes**: Kubernetes monitors all service health. If the Python worker loses connection to Redis, K8s automatically restarts the pod.
+*   **Graceful Shutdown**: The Backend API implements `preStop` hooks to finish ongoing Redis transactions before a pod is terminated during a deployment.
+
+---
+
+## 5. Environment Separation (Kustomize)
+We utilize **Kustomize Overlays** to maintain parity between Development and Production while allowing specific configuration overrides:
+*   **Dev**: Uses `dev-` namePrefix, debug logging, and single-instance replicas.
+*   **Prod**: Uses `prod-` namePrefix, info logging, 3+ replicas, and strict resource limits.
