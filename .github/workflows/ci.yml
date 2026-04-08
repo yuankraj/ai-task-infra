@@ -9,7 +9,7 @@ on:
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  INFRA_REPO: "your-org/ai-task-infra"
+  INFRA_REPO: "yuankraj/ai-task-infra"
 
 jobs:
   lint-and-test:
