@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: ai-task-platform
+  labels:
+    app: worker
+    version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: DOCKER_USERNAME/atp-worker:IMAGE_TAG
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: WORKER_CONCURRENCY
+              value: "1"
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import redis, os
+                  r = redis.Redis(
+                    host=os.getenv('REDIS_HOST','redis-service'),
+                    port=int(os.getenv('REDIS_PORT','6379')),
+                    password=os.getenv('REDIS_PASSWORD') or None,
+                    socket_connect_timeout=3
+                  )
+                  r.ping()
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import redis, os
+                  r = redis.Redis(
+                    host=os.getenv('REDIS_HOST','redis-service'),
+                    port=int(os.getenv('REDIS_PORT','6379')),
+                    password=os.getenv('REDIS_PASSWORD') or None,
+                    socket_connect_timeout=3
+                  )
+                  r.ping()
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+# HorizontalPodAutoscaler for the worker
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker-hpa
+  namespace: ai-task-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
