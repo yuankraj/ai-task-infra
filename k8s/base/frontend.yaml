@@ -27,7 +27,7 @@ spec:
         fsGroup: 1001
       containers:
         - name: frontend
-          image: DOCKER_USERNAME/atp-frontend:IMAGE_TAG
+          image: placeholder/atp-frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80

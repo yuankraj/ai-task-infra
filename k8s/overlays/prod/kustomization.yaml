@@ -17,6 +17,15 @@ patches:
       - op: replace
         path: /data/LOG_LEVEL
         value: warn
+      - op: replace
+        path: /data/REDIS_HOST
+        value: prod-redis-service
+      - op: replace
+        path: /data/MONGODB_URI
+        value: mongodb://prod-mongodb-service:27017/ai-task-platform
+      - op: replace
+        path: /data/FRONTEND_URL
+        value: http://prod-frontend-service
   - target:
       kind: Deployment
       name: worker

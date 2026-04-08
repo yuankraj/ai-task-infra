@@ -28,7 +28,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: backend
-          image: DOCKER_USERNAME/atp-backend:IMAGE_TAG
+          image: placeholder/atp-backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
