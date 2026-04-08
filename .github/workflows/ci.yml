@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -37,7 +37,7 @@ jobs:
   build-and-push:
     needs: lint-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v3
 
@@ -84,7 +84,7 @@ jobs:
   update-infra-repo:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     steps:
       - name: Checkout Infra Repository
         uses: actions/checkout@v3
