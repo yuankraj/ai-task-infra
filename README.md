@@ -72,5 +72,5 @@ Detailed technical documentation is available in the following files:
 
 ## 📞 Contact
 **Vishal [Your Surname]**
-- LinkedIn: [Your Profile]
-- Portfolio: [Your Website]
+- LinkedIn: https://www.linkedin.com/in/yuankraj
+- Portfolio: http://www.yuankraj.me/
